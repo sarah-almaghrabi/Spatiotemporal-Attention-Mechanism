@@ -45,7 +45,7 @@ sess = tf.Session(config=config)
 from keras import backend as K
 K.set_session(sess)
 
-h_s = 16  # {16, 32, 64, 128}
+h_s = 32  # {16, 32, 64, 128}
 dropout = 0.2  # {0.2, 0.5}
 batch_size = 256  # {128, 256, 512}
 epochs = 50 # 50
@@ -71,68 +71,51 @@ y_test = y_test.reshape((y_test.shape[0], Ty, 1))     # (4379, 2, 1)
 
 # Model
 t_repeator = RepeatVector(Tx)
-
-def t_densor(units , name):
-    return   Dense(units, activation = "relu", name=name)
+t_densor = Dense(1, activation = "relu")
 
 s_repeator = RepeatVector(inp_var)
-# s_densor_1 = Dense(h_s, activation = "relu")
-# s_densor_2 = Dense(1, activation = "relu")   # for attention weights
+s_densor_1 = Dense(h_s, activation = "relu")
+s_densor_2 = Dense(1, activation = "relu")   # for attention weights
 
-def concatenator (name ):
-    return Concatenate(axis=-1, name=name)
+concatenator = Concatenate(axis=-1)
 
 # Softmax
 def softMaxLayer(x):
     return softmax(x, axis=1)   # Use axis = 1 for attention
 
-def activator(name):
-    return   Activation(softMaxLayer,name=name)
+activator = Activation(softMaxLayer)
+dotor = Dot(axes = 1)
 
-def dotor(name):
-    return  Dot(axes = 1, name=name)
-
-def decoder_lstm(units , name):
-    return LSTM(units, return_state = True, name = name)
-# s_decoder_lstm = LSTM(h_s, return_state = True)
-# t_decoder_lstm = LSTM(h_s, return_state = True)
+s_decoder_lstm = LSTM(h_s, return_state = True)
+t_decoder_lstm = LSTM(h_s, return_state = True)
 
 flatten = Flatten()
 
 # Temporal Attention
-def temporal_attention(a, s_prev,t):
+def temporal_attention(a, s_prev):
     
     # s_prev: previous hidden state of decoder (n_samples, 16)
     # a: Sequence of encoder hidden states (n_sample, 10, 16)
-    # t: is the time step to decode
     s_prev = t_repeator(s_prev)  # (n_samples, 10, 16)
-    concat = concatenator(name='TA_hCONCprev_h_'+str(t) )([a, s_prev])   # (n_samples, 10, 32)
-    e_temporal = t_densor(units= 1 , name='temporal_attention_'+str(t))(concat)  # (n_samples, 10, 1)
-    alphas = activator(name='softmax_T_A_'+str(t))(e_temporal)    # (n_samples, 10, 1)
-    print('TEPORAL attention alphas.shape')
-    print(alphas.shape)
-    t_context = dotor(name='context_T_A_'+str(t))([alphas, a])    # (n_samples, 1, 16)
+    concat = concatenator([a, s_prev])   # (n_samples, 10, 32)
+    e_temporal = t_densor(concat)  # (n_samples, 10, 1)
+    alphas = activator(e_temporal)    # (n_samples, 10, 1)
+    t_context = dotor([alphas, a])    # (n_samples, 1, 16)
     
     return t_context, alphas, e_temporal
 
 # Spatial Attention
-def spatial_attention(v, s_prev,t):
+def spatial_attention(v, s_prev):
     
     # s_prev: previous hidden state of decoder (n_samples, 16)
     # v: variable vectors (n_samples, 8, 10): (n_samples, inp_var, Tx)
-        # t: is the time step to decode
-
-    # s_fc = s_densor_1(v)   # D .. spatial embeddings ..   # (n_samples, 8, 16)
-    s_fc = t_densor(units= h_s , name='spatial_embeddings_'+str(t))(v)  # D .. spatial embeddings ..   # (n_samples, 8, 16)
-
+    s_fc = s_densor_1(v)   # D .. spatial embeddings ..   # (n_samples, 8, 16)
+    
     s_prev = s_repeator(s_prev)  # (n_samples, 8, 16)
-    concat = concatenator(name='SA_hCONCprev_h_'+str(t))([s_fc, s_prev])    # (n_samples, 8, 32)
-    # e_spatial = s_densor_2(concat)  # (n_samples, 8, 1)
-    e_spatial = t_densor(units= 1 , name='spatial_attention_'+str(t))(concat)  #  (n_samples, 8, 1)
-    betas = activator(name='softmax_S_A_'+str(t))(e_spatial) # (n_samples, 8, 1)
-    print('Spatial attention alphas.shape')
-    print(betas.shape)
-    s_context = dotor(name='context_S_A_'+str(t))([betas, s_fc])  # (n_samples, 1, 16)
+    concat = concatenator([s_fc, s_prev])    # (n_samples, 8, 32)
+    e_spatial = s_densor_2(concat)  # (n_samples, 8, 1)
+    betas = activator(e_spatial) # (n_samples, 8, 1)
+    s_context = dotor([betas, s_fc])  # (n_samples, 1, 16)
     
     return s_context, betas, e_spatial
 
@@ -169,37 +152,33 @@ def model(Tx, Ty, inp_var, h_s, dropout):
     for t in range(Ty):
         
         # Temporal Attention
-        t_context, alphas, e_temporal = temporal_attention (lstm_2, ts, t)  # (None, 1, 16)
+        t_context, alphas, e_temporal = temporal_attention (lstm_2, ts)  # (None, 1, 16)
         
-        t_context = Dense (con_dim, activation = "relu", name = 't_context_'+str(t) )(t_context)  # (None, 1, 4)
+        t_context = Dense (con_dim, activation = "relu")(t_context)  # (None, 1, 4)
         t_context = flatten(t_context)  # (None, 4)
-        t_context = concatenator(name='t_contextCONCyhat_'+str(t))([t_context, yhat])   # (None, 5)
-        t_context = Reshape((1, con_dim + 1), name='t_reshaped_context_'+str(t) )(t_context)   # (None, 1, 5)
+        t_context = concatenator([t_context, yhat])   # (None, 5)
+        t_context = Reshape((1, con_dim + 1), name='t_context_'+str(t) )(t_context)   # (None, 1, 5)
         
         # Spatial Attention
-        s_context, betas, e_spatial = spatial_attention (spatial_input, ss,t)   # (None, 1, 16)
+        s_context, betas, e_spatial = spatial_attention (spatial_input, ss)   # (None, 1, 16)
     
-        s_context = Dense (con_dim, activation = "relu",name= 's_context'+str(t) )(s_context)
+        s_context = Dense (con_dim, activation = "relu")(s_context)
         s_context = flatten(s_context)  # (None, 4)
-        s_context = concatenator(name='s_contextCONCyhat_'+str(t))([s_context, yhat])   # (None, 5)
-        s_context = Reshape((1, con_dim + 1), name='s_reshaped_context'+str(t) )(s_context)   # (None, 1, 5)
+        s_context = concatenator([s_context, yhat])   # (None, 5)
+        s_context = Reshape((1, con_dim + 1), name='s_context'+str(t) )(s_context)   # (None, 1, 5)
         
         # T Decoder LSTM
-        # ts, _, tc = s_decoder_lstm(t_context, initial_state=[ts, tc])
-        ts, _, tc = decoder_lstm(h_s,name='t_decoder_lstm_'+str(t))(t_context, initial_state=[ts, tc])
-
+        ts, _, tc = t_decoder_lstm(t_context, initial_state=[ts, tc])
         ts = Dropout (dropout)(ts)   # (None, 16)
         
         # S Decoder LSTM
-        # ss, _, sc = s_decoder_lstm(s_context, initial_state=[ss, sc])
-        ss, _, sc =  decoder_lstm(h_s,name='s_decoder_lstm_'+str(t))(s_context, initial_state=[ss, sc])
+        ss, _, sc = s_decoder_lstm(s_context, initial_state=[ss, sc])
         ss = Dropout (dropout)(ss)   # (None, 16)
         
-        context = concatenator(name='tsCONCATss_'+str(t))([ts, ss])   # (None, 32)
+        context = concatenator([ts, ss])   # (None, 32)
         
         # FC Layer
-        # context = Dense (h_s, activation = "relu")(context)   # (None, 16)
-
+        #context = Dense (h_s, activation = "relu")(context)   # (None, 16)
         
         # FC Layer
         yhat = Dense (1, activation = "linear", name='out_'+str(t))(context)
@@ -236,8 +215,7 @@ yhat0_val = np.zeros((y_val.shape[0], 1))
 s_train = x_train.transpose(0, 2, 1)    # (30652, 8, 10)   Transpose of axes 2 and 3 keeping axis 1 same
 s_val = x_val.transpose(0, 2, 1)        # (8758, 8, 10)    Transpose of axes 2 and 3 keeping axis 1 same
 
-#outputs = list(Yoh.swapaxes(0,1))
- 
+#outputs = list(Yoh.swapaxes(0,1)) 
 outputs_train = list(y_train.swapaxes(0,1))    # Ty numpy lists each (30562, 1)
 outputs_val = list(y_val.swapaxes(0,1))        # Ty numpy lists each (8758, 1)
 

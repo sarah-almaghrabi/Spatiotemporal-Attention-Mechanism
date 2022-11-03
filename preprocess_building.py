@@ -1,14 +1,14 @@
 # fix random seed for reproducibility
 from numpy.random import seed 
 seed(1)
-from tensorflow import set_random_seed
-set_random_seed(2)
+import tensorflow  
+tensorflow.random.set_seed(2)
 
 from pandas import DataFrame, concat, read_csv
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 import numpy as np
 
-Tx = 5   # {5, 10, 12, 18, 24}
+Tx = 24   # {5, 10, 12, 18, 24}
 Ty = 4    # {1, 2, 3, 4}
 
 inp_var = 9  # Number of input variables

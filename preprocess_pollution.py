@@ -1,16 +1,16 @@
 # fix random seed for reproducibility
 from numpy.random import seed 
 seed(1)
-from tensorflow import set_random_seed
-set_random_seed(2)
+import tensorflow  
+tensorflow.random.set_seed(2)
 
 from pandas import DataFrame, concat, read_csv
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 import numpy as np
 
-Tx = 5  # {5, 10, 12, 18, 24}
-Ty = 1   # {1, 2, 3, 4}
-
+Tx = 10 # {5, 10, 12, 18, 24}
+Ty =2 # {1, 2, 3, 4}
+ 
 inp_var = 8   # Number of input variables
 out_var = 1   # Number of output variables
 train_split = 0.6   # Size of the training set 
@@ -128,3 +128,7 @@ def scale_features (x_data, y_data):
 x_train, y_train = scale_features (x_train, y_train)     # (30652, 10, 8), (30652, 2)
 x_val, y_val = scale_features (x_val, y_val)    # (8758, 10, 8), (8758, 2)
 x_test, y_test = scale_features (x_test, y_test)     # (4379, 10, 8), (4379, 2)
+
+
+print(x_train.shape)
+print(y_train.shape)
